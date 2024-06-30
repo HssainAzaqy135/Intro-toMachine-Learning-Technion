@@ -4,6 +4,11 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 def prepare_data(training_data, new_data):
     new_copy = new_data.copy()
+    
+    # Filling null values of houshold income in new data with median of training
+    replacement_value= training_data["household_income"].median()
+    new_copy["household_income"].fillna(replacement_value,inplace = True)
+    
     # removing blood_type and adding special_property
     new_copy["SpecialProperty"] = new_copy["blood_type"].isin(["O+", "B+"])
     new_copy.drop(columns=["blood_type"], inplace=True)
@@ -15,8 +20,8 @@ def prepare_data(training_data, new_data):
     list_to_min_max = [feature for feature in pcr_features if (pcr_features.index(feature)+1) in [3,10]]
 
     # features to scale
-    features_to_min_max = new_data[list_to_min_max]
-    features_to_standard_scale = new_data[list_to_standard_scale]
+    features_to_min_max = new_copy[list_to_min_max]
+    features_to_standard_scale = new_copy[list_to_standard_scale]
     
     # features to fit the scalers
     min_max_fit_data = training_data[list_to_min_max]
