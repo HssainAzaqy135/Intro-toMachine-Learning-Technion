@@ -1,188 +1,154 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "20634b57-71bd-4f0f-a0da-d4d907b47e98",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "from sklearn.base import BaseEstimator, ClassifierMixin\n",
-    "import numpy as np\n",
-    "import pandas as pd\n",
-    "\n",
-    "class SoftSVM(BaseEstimator, ClassifierMixin):\n",
-    "    \"\"\"\n",
-    "    Custom C-Support Vector Classification.\n",
-    "    \"\"\"\n",
-    "    def __init__(self, C: float, lr: float = 1e-5, batch_size = 32):\n",
-    "        \"\"\"\n",
-    "        Initialize an instance of this class.\n",
-    "        ** Do not edit this method **\n",
-    "\n",
-    "        :param C: inverse strength of regularization. Must be strictly positive.\n",
-    "        :param lr: the SGD learning rate (step size)\n",
-    "        \"\"\"\n",
-    "        self.C = C\n",
-    "        self.lr = lr\n",
-    "        self.batch_size = batch_size\n",
-    "        self.w = None\n",
-    "        self.b = 0.0\n",
-    "\n",
-    "    # Initialize a random weight vector\n",
-    "    def init_solution(self, n_features: int):\n",
-    "        \"\"\"\n",
-    "        Randomize an initial solution (weight vector)\n",
-    "        ** Do not edit this method **\n",
-    "\n",
-    "        :param n_features:\n",
-    "        \"\"\"\n",
-    "        self.w = np.random.randn(n_features)\n",
-    "        self.b = 0.0\n",
-    "\n",
-    "    @staticmethod\n",
-    "    def loss(w, b: float, C: float, X, y):\n",
-    "        \"\"\"\n",
-    "        Compute the SVM objective loss.\n",
-    "\n",
-    "        :param w: weight vector for linear classification; array of shape (n_features,)\n",
-    "        :param b: bias scalar for linear classification\n",
-    "        :param C: inverse strength of regularization. Must be strictly positive.\n",
-    "        :param X: samples for loss computation; array of shape (n_samples, n_features)\n",
-    "        :param y: targets for loss computation; array of shape (n_samples,)\n",
-    "        :return: the Soft SVM objective loss (float scalar)\n",
-    "        \"\"\"\n",
-    "        margins = (X.dot(w) + b)\n",
-    "        hinge_inputs = np.multiply(margins, y)\n",
-    "\n",
-    "        norm = np.linalg.norm(w)\n",
-    "\n",
-    "        # TODO: complete the loss calculation [DONE]\n",
-    "    \n",
-    "        hinge_values = np.maximum(0, 1 - hinge_inputs)\n",
-    "        ret_loss = norm**2 + C * np.sum(hinge_values)\n",
-    "\n",
-    "        return ret_loss\n",
-    "\n",
-    "    @staticmethod\n",
-    "    def subgradient(w, b: float, C: float, X, y):\n",
-    "        \"\"\"\n",
-    "        Compute the (analytical) SVM objective sub-gradient.\n",
-    "    \n",
-    "        :param w: weight vector for linear classification; array of shape (n_features,)\n",
-    "        :param b: bias scalar for linear classification\n",
-    "        :param C: inverse strength of regularization. Must be strictly positive.\n",
-    "        :param X: samples for loss computation; array of shape (n_samples, n_features)\n",
-    "        :param y: targets for loss computation; array of shape (n_samples,)\n",
-    "        :return: a tuple with (the gradient of the weights, the gradient of the bias)\n",
-    "        \"\"\"\n",
-    "        # make sure X and y are numpy arrays\n",
-    "        if isinstance(X, pd.DataFrame):\n",
-    "            X = X.to_numpy()\n",
-    "        if isinstance(y, pd.Series):\n",
-    "            y = y.to_numpy()\n",
-    "    \n",
-    "        margins = X.dot(w) + b\n",
-    "        hinge_inputs = np.multiply(margins, y)\n",
-    "        f_outputs = np.where(hinge_inputs < 1, -1, 0)\n",
-    "        b_to_sum = np.multiply(y, f_outputs)\n",
-    "        w_to_sum = np.multiply(b_to_sum[:, np.newaxis], X)  # making sure correct dimensions for multiply\n",
-    "        g_w = 2 * w + C * np.sum(w_to_sum, axis=0)  # Summing over the samples\n",
-    "        g_b = C * np.sum(b_to_sum)\n",
-    "    \n",
-    "        return g_w, g_b\n",
-    "\n",
-    "    def fit_with_logs(self, X, y, max_iter: int = 2000, keep_losses: bool = True):\n",
-    "        \"\"\"\n",
-    "        Fit the model according to the given training data.\n",
-    "\n",
-    "        :param X: training samples; array of shape (n_samples, n_features)\n",
-    "        :param y: training targets (+1 and -1); array of shape (n_samples,)\n",
-    "        :param max_iter: number of SGD iterations\n",
-    "        :param keep_losses:\n",
-    "        :return: the training losses and accuracies during training\n",
-    "        \"\"\"\n",
-    "        # Initialize learned parameters\n",
-    "        self.init_solution(X.shape[1])\n",
-    "\n",
-    "        losses = []\n",
-    "        accuracies = []\n",
-    "\n",
-    "        if keep_losses:\n",
-    "            losses.append(self.loss(self.w, self.b, self.C, X, y))\n",
-    "            accuracies.append(self.score(X, y))\n",
-    "\n",
-    "        permutation = np.random.permutation(len(y))\n",
-    "        X = X[permutation, :]\n",
-    "        y = y[permutation]\n",
-    "        \n",
-    "        # Iterate over batches\n",
-    "        for iter in range(0, max_iter):\n",
-    "            start_idx = (iter * self.batch_size) % X.shape[0]\n",
-    "            end_idx = min(X.shape[0], start_idx + self.batch_size)\n",
-    "            batch_X = X[start_idx:end_idx, :]\n",
-    "            batch_y = y[start_idx:end_idx]\n",
-    "\n",
-    "            # TODO: Compute the (sub)gradient of the current *batch*\n",
-    "            g_w, g_b = self.subgradient(w=self.w, b=self.b, C=self.C, X=batch_X, y=batch_y)\n",
-    "            # Perform a (sub)gradient step\n",
-    "            # TODO: update the learned parameters correctly\n",
-    "            self.w -= self.lr * g_w\n",
-    "            self.b -= self.lr * g_b\n",
-    "            \n",
-    "            if keep_losses:\n",
-    "                losses.append(self.loss(self.w, self.b, self.C, X, y))\n",
-    "                accuracies.append(self.score(X, y))\n",
-    "\n",
-    "        return losses, accuracies\n",
-    "\n",
-    "    def fit(self, X, y, max_iter: int = 2000):\n",
-    "        \"\"\"\n",
-    "        Fit the model according to the given training data.\n",
-    "        ** Do not edit this method **\n",
-    "\n",
-    "        :param X: training samples; array of shape (n_samples, n_features)\n",
-    "        :param y: training targets (+1 and -1); array of shape (n_samples,)\n",
-    "        :param max_iter: number of SGD iterations\n",
-    "        \"\"\"\n",
-    "        self.fit_with_logs(X, y, max_iter=max_iter, keep_losses=False)\n",
-    "\n",
-    "        return self\n",
-    "\n",
-    "    def predict(self, X):\n",
-    "        \"\"\"\n",
-    "        Perform classification on samples in X.\n",
-    "\n",
-    "        :param X: samples for prediction; array of shape (n_samples, n_features)\n",
-    "        :return: Predicted class labels for samples in X; array of shape (n_samples,)\n",
-    "                 NOTE: the labels must be either +1 or -1\n",
-    "        \"\"\"\n",
-    "        # TODO: compute the predicted labels (+1 or -1)\n",
-    "        y_pred = np.sign(X.dot(self.w) + self.b)\n",
-    "\n",
-    "        return y_pred\n"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.12.4"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+from sklearn.base import BaseEstimator, ClassifierMixin
+import numpy as np
+import pandas as pd
+
+class SoftSVM(BaseEstimator, ClassifierMixin):
+    """
+    Custom C-Support Vector Classification.
+    """
+    def __init__(self, C: float, lr: float = 1e-5, batch_size = 32):
+        """
+        Initialize an instance of this class.
+        ** Do not edit this method **
+
+        :param C: inverse strength of regularization. Must be strictly positive.
+        :param lr: the SGD learning rate (step size)
+        """
+        self.C = C
+        self.lr = lr
+        self.batch_size = batch_size
+        self.w = None
+        self.b = 0.0
+
+    # Initialize a random weight vector
+    def init_solution(self, n_features: int):
+        """
+        Randomize an initial solution (weight vector)
+        ** Do not edit this method **
+
+        :param n_features:
+        """
+        self.w = np.random.randn(n_features)
+        self.b = 0.0
+
+    @staticmethod
+    def loss(w, b: float, C: float, X, y):
+        """
+        Compute the SVM objective loss.
+
+        :param w: weight vector for linear classification; array of shape (n_features,)
+        :param b: bias scalar for linear classification
+        :param C: inverse strength of regularization. Must be strictly positive.
+        :param X: samples for loss computation; array of shape (n_samples, n_features)
+        :param y: targets for loss computation; array of shape (n_samples,)
+        :return: the Soft SVM objective loss (float scalar)
+        """
+        margins = (X.dot(w) + b)
+        hinge_inputs = np.multiply(margins, y)
+
+        norm = np.linalg.norm(w)
+
+        # TODO: complete the loss calculation [DONE]
+    
+        hinge_values = np.maximum(0, 1 - hinge_inputs)
+        ret_loss = norm**2 + C * np.sum(hinge_values)
+
+        return ret_loss
+
+    @staticmethod
+    def subgradient(w, b: float, C: float, X, y):
+        """
+        Compute the (analytical) SVM objective sub-gradient.
+    
+        :param w: weight vector for linear classification; array of shape (n_features,)
+        :param b: bias scalar for linear classification
+        :param C: inverse strength of regularization. Must be strictly positive.
+        :param X: samples for loss computation; array of shape (n_samples, n_features)
+        :param y: targets for loss computation; array of shape (n_samples,)
+        :return: a tuple with (the gradient of the weights, the gradient of the bias)
+        """
+        # make sure X and y are numpy arrays
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
+        if isinstance(y, pd.Series):
+            y = y.to_numpy()
+    
+        margins = X.dot(w) + b
+        hinge_inputs = np.multiply(margins, y)
+        f_outputs = np.where(hinge_inputs < 1, -1, 0)
+        b_to_sum = np.multiply(y, f_outputs)
+        w_to_sum = np.multiply(b_to_sum[:, np.newaxis], X)  # making sure correct dimensions for multiply
+        g_w = 2 * w + C * np.sum(w_to_sum, axis=0)  # Summing over the samples
+        g_b = C * np.sum(b_to_sum)
+    
+        return g_w, g_b
+
+    def fit_with_logs(self, X, y, max_iter: int = 2000, keep_losses: bool = True):
+        """
+        Fit the model according to the given training data.
+
+        :param X: training samples; array of shape (n_samples, n_features)
+        :param y: training targets (+1 and -1); array of shape (n_samples,)
+        :param max_iter: number of SGD iterations
+        :param keep_losses:
+        :return: the training losses and accuracies during training
+        """
+        # Initialize learned parameters
+        self.init_solution(X.shape[1])
+
+        losses = []
+        accuracies = []
+
+        if keep_losses:
+            losses.append(self.loss(self.w, self.b, self.C, X, y))
+            accuracies.append(self.score(X, y))
+
+        permutation = np.random.permutation(len(y))
+        X = X[permutation, :]
+        y = y[permutation]
+        
+        # Iterate over batches
+        for iter in range(0, max_iter):
+            start_idx = (iter * self.batch_size) % X.shape[0]
+            end_idx = min(X.shape[0], start_idx + self.batch_size)
+            batch_X = X[start_idx:end_idx, :]
+            batch_y = y[start_idx:end_idx]
+
+            # TODO: Compute the (sub)gradient of the current *batch*
+            g_w, g_b = self.subgradient(w=self.w, b=self.b, C=self.C, X=batch_X, y=batch_y)
+            # Perform a (sub)gradient step
+            # TODO: update the learned parameters correctly
+            self.w -= self.lr * g_w
+            self.b -= self.lr * g_b
+            
+            if keep_losses:
+                losses.append(self.loss(self.w, self.b, self.C, X, y))
+                accuracies.append(self.score(X, y))
+
+        return losses, accuracies
+
+    def fit(self, X, y, max_iter: int = 2000):
+        """
+        Fit the model according to the given training data.
+        ** Do not edit this method **
+
+        :param X: training samples; array of shape (n_samples, n_features)
+        :param y: training targets (+1 and -1); array of shape (n_samples,)
+        :param max_iter: number of SGD iterations
+        """
+        self.fit_with_logs(X, y, max_iter=max_iter, keep_losses=False)
+
+        return self
+
+    def predict(self, X):
+        """
+        Perform classification on samples in X.
+
+        :param X: samples for prediction; array of shape (n_samples, n_features)
+        :return: Predicted class labels for samples in X; array of shape (n_samples,)
+                 NOTE: the labels must be either +1 or -1
+        """
+        # TODO: compute the predicted labels (+1 or -1)
+        y_pred = np.sign(X.dot(self.w) + self.b)
+
+        return y_pred
